@@ -1,12 +1,15 @@
 # =====================================================================
-# FFXI SOUND SESSION MUTER (CoreAudio WASAPI Interop - Fully Fixed)
-# Target Process: pol.exe
+# APPLICATION SOUND SESSION MUTER (CoreAudio WASAPI Interop)
+# Target: Any specified process
 # Behavior: Toggle Mute (Global - All Instances)
 # =====================================================================
 
+# CHANGE THIS VALUE to the process name you want to mute/unmute (e.g., "pol.exe", "chrome.exe", "spotify.exe")
+$TargetProcess = "pol.exe"
+
 # Generate a unique session namespace to bypass PowerShell's Add-Type cache lock
 $SessionId = Get-Random -Minimum 100000 -Maximum 999999
-$Namespace = "FFXIMuter_$SessionId"
+$Namespace = "AppMuter_$SessionId"
 
 $Signature = @"
 using System;
@@ -130,6 +133,6 @@ Add-Type -TypeDefinition $Signature
 
 # Safely resolve and invoke our dynamically namespaced type using standard evaluation syntax
 $ControllerType = ("${Namespace}.SoundController" -as [type])
-$Result = $ControllerType::ToggleMute("pol")
+$Result = $ControllerType::ToggleMute($TargetProcess)
 
 Write-Host $Result -ForegroundColor Cyan
