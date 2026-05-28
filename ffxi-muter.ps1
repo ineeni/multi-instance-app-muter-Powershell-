@@ -1,8 +1,10 @@
 # =====================================================================
-# FFXI SOUND SESSION MUTER (CoreAudio WASAPI Interop - Fully Fixed)
-# Target Process: pol.exe
-# Behavior: Toggle Mute (Global - All Instances)
+# FFXI SOUND SESSION MUTER (Instance-Specific Muter)
+# Target: Specific pol.exe instance by Character/Window Name
 # =====================================================================
+
+# CHANGE THIS VALUE to the character name you want to mute/unmute
+$Target = "CharacterName"
 
 # Generate a unique session namespace to bypass PowerShell's Add-Type cache lock
 $SessionId = Get-Random -Minimum 100000 -Maximum 999999
@@ -67,12 +69,7 @@ namespace $Namespace {
     }
 
     public class SoundController {
-        public static string ToggleMute(string targetName) {
-            targetName = targetName.ToLower().Trim();
-            if (targetName.EndsWith(".exe")) {
-                targetName = targetName.Substring(0, targetName.Length - 4);
-            }
-
+        public static string ToggleMuteByTitle(string targetTitle) {
             var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
             IMMDevice device;
             int hr = enumerator.GetDefaultAudioEndpoint(0, 1, out device);
@@ -91,6 +88,7 @@ namespace $Namespace {
             int count;
             sessionEnum.GetCount(out count);
             int matchedCount = 0;
+            string stateMsg = "Unknown";
 
             for (int i = 0; i < count; i++) {
                 object sessionObj;
@@ -107,11 +105,18 @@ namespace $Namespace {
 
                 try {
                     using (var proc = Process.GetProcessById((int)pid)) {
-                        if (proc.ProcessName.ToLower() == targetName) {
-                            bool isMuted;
-                            simpleVolume.GetMute(out isMuted);
+                        // Check if process is pol.exe and window title matches character name
+                        if (proc.ProcessName.ToLower() == "pol" && 
+                            proc.MainWindowTitle.IndexOf(targetTitle, StringComparison.OrdinalIgnoreCase) >= 0) {
+                            
+                            bool currentlyMuted;
+                            simpleVolume.GetMute(out currentlyMuted);
+                            bool newMuteState = !currentlyMuted;
+                            
                             Guid emptyGuid = Guid.Empty;
-                            simpleVolume.SetMute(!isMuted, ref emptyGuid);
+                            simpleVolume.SetMute(newMuteState, ref emptyGuid);
+                            
+                            stateMsg = newMuteState ? "MUTED" : "UNMUTED";
                             matchedCount++;
                         }
                     }
@@ -119,7 +124,7 @@ namespace $Namespace {
                     // Ignore dead processes
                 }
             }
-            return "Toggled " + matchedCount + " process(es).";
+            return "Successfully toggled: " + matchedCount + " instance(s) matching '" + targetTitle + "'. State is now: " + stateMsg;
         }
     }
 }
@@ -128,8 +133,8 @@ namespace $Namespace {
 # Compile the fresh signature definitions
 Add-Type -TypeDefinition $Signature
 
-# Safely resolve and invoke our dynamically namespaced type using standard evaluation syntax
+# Resolve and invoke the controller
 $ControllerType = ("${Namespace}.SoundController" -as [type])
-$Result = $ControllerType::ToggleMute("pol")
+$Result = $ControllerType::ToggleMuteByTitle($Target)
 
 Write-Host $Result -ForegroundColor Cyan
